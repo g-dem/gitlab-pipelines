@@ -1,0 +1,46 @@
+variables:
+  PROJECT_NAME: project-name
+  AWS_DEFAULT_REGION: eu-west-1
+  S3_BUCKET: cf-bucket
+
+stages:
+  - deploy:qa
+  - deploy:prod
+
+.deploy:
+  image: python:3.8
+  before_script:
+    - curl -OJ -L https://go.dev/dl/go1.17.12.linux-amd64.tar.gz
+    - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.12.linux-amd64.tar.gz
+    - export PATH=$PATH:/usr/local/go/bin
+    - pip3 install aws-sam-cli --upgrade
+  script:
+    - sam build
+    - |
+      sam deploy \
+      --stack-name ${ENV}-${PROJECT_NAME} \
+      --s3-bucket ${S3_BUCKET} \
+      --s3-prefix ${PROJECT_NAME}/${ENV} \
+      --region ${AWS_DEFAULT_REGION} \
+      --capabilities CAPABILITY_IAM \
+      --parameter-overrides Environment=${ENV} \
+      --tags Project=${PROJECT_NAME} Environment=${ENV} Cloudformed=true \
+      --no-fail-on-empty-changeset
+  environment:
+    name: $ENV    
+
+deploy:qa:
+  stage: deploy:qa
+  extends: .deploy
+  only:
+    - main
+  variables:
+    ENV: qa
+
+deploy:prod:
+  stage: deploy:prod
+  extends: .deploy
+  only:
+    - tags
+  variables:
+    ENV: prod
